@@ -4,9 +4,6 @@
 #
 # Output columns:
 #   Hostname,Date,Time,%usr,%sys,%idle,%iowait,kbmemfree,kbmemused,%memused
-#
-# Usage:
-#   ./sar_metrics_loop.sh [-d DAYS] [-o OUTPUT.csv] [-s SA_DIR]
 
 set -euo pipefail
 
