@@ -1,5 +1,6 @@
-#!/bin/bash
-#Hostname,Date,Time,%usr,%sys,%idle,%iowait,kbmemfree,kbmemused,%memused
-#         └─────┘    └───────── CPU ─────────┘ └────────── MEMORY ──────────┘
-# One-liner: Copy and paste this entire command
-sadf -s $(date -d "13 days ago" +%Y-%m-%d) -e $(date +%Y-%m-%d) -dU /var/log/sa/sa* -- -u -r 2>/dev/null | awk -F';' 'BEGIN{print "Hostname,Date,Time,%usr,%sys,%idle,%iowait,kbmemfree,kbmemused,%memused"} NR>1{if($5=="CPU" && $4=="-1"){split($3,dt," "); cpu[$1","dt[1]","dt[2]]=$7","$9","$12","$10} if($4=="MEM"){split($3,dt," "); key=$1","dt[1]","dt[2]; if(key in cpu) print key","cpu[key]","$6","$7","$8}}' | sort -t, -k2,2 -k3,3 > metrics.csv && echo "Done: metrics.csv ($(wc -l < metrics.csv) lines)"
+#!/usr/bin/env bash
+# sadf_metrics_oneliner.sh — paste-friendly one-liner: last 14 days of CPU + memory -> metrics.csv
+#
+#   Hostname,Date,Time,%usr,%sys,%idle,%iowait,kbmemfree,kbmemused,%memused
+#   └─ from file ─────────┘ └──────── CPU ────────┘ └─────── MEMORY ───────┘
+D=$(ls -d /var/log/sa /var/log/sysstat 2>/dev/null | head -1); { echo "Hostname,Date,Time,%usr,%sys,%idle,%iowait,kbmemfree,kbmemused,%memused"; for i in $(seq 13 -1 0); do day=$(date -d "$i days ago" +%F); f=$D/sa$(date -d "$i days ago" +%d); for x in "" .xz .gz .bz2; do [ -f "$f$x" ] && break; done; [ -f "$f$x" ] || continue; case $x in .xz) c="xz -dc";; .gz) c="gzip -dc";; .bz2) c="bzip2 -dc";; *) c=cat;; esac; $c "$f$x" > /tmp/.sa$$; LC_ALL=C sadf -dt /tmp/.sa$$ -- -u -r 2>/dev/null | awk -F';' -v w="$day" '/^# hostname/{delete c; for(k=1;k<=NF;k++)c[$k]=k; s=("CPU" in c)?"u":"r"; next} /^#/{next} {split($c["timestamp"],t," "); if(t[1]!=w)next; k=$1","t[1]","t[2]; if(s=="u"&&$c["CPU"]=="-1"){u[k]=$c["%user"]","$c["%system"]","$c["%idle"]","$c["%iowait"]; o[++n]=k} else if(s=="r") r[k]=$c["kbmemfree"]","$c["kbmemused"]","$c["%memused"]} END{for(j=1;j<=n;j++) if(o[j] in r) print o[j]","u[o[j]]","r[o[j]]}'; done; rm -f /tmp/.sa$$; } > metrics.csv && echo "Done: metrics.csv ($(($(wc -l < metrics.csv)-1)) data rows)"
